@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public enum SkillType
@@ -23,8 +24,6 @@ public class Game_Mgr : MonoBehaviour
     public Button RIghtBtn = null;
 
     [Header("SkillBtn")]
-    public Button Atk_Btn;
-    public Image Atk_Cool;
     public Button[] Skill_Btn;
     public Text[] Skill_Cool;
     public Image[] Cool_Img;
@@ -36,6 +35,11 @@ public class Game_Mgr : MonoBehaviour
     [Header("E_HpImg")]
     public Image E_HpBar;
     public Text E_HpText;
+
+    [Header("EndPanel")]
+    public GameObject EndPanel;
+    public Text EndText;
+    public Button Restart_Btn;
 
     [HideInInspector] public bool isRightClick = false;
     [HideInInspector] public bool isLeftClick = false;
@@ -53,24 +57,18 @@ public class Game_Mgr : MonoBehaviour
         m_RefPlayer = GameObject.FindObjectOfType<Player_Ctrl>();
         m_RefEnemy = GameObject.FindObjectOfType<Enemy_Ctrl>();
 
+        EndPanel.SetActive(false);
+
         m_RefPlayer.HpUpdate(0.0f);
         m_RefEnemy.E_HpUpdate(0.0f);
 
-        if (Atk_Btn != null)
-        {
-            Atk_Btn.onClick.AddListener(() =>
+        if (Skill_Btn[0] != null)
+        {//실행기 만들기
+            Skill_Btn[0].onClick.AddListener(() =>
             {
-
+                UseSill_Key(SkillType.Skill_0);
             });
         }
-
-        if (Skill_Btn[0] != null)
-            {//실행기 만들기
-                Skill_Btn[0].onClick.AddListener(() =>
-                {
-                    UseSill_Key(SkillType.Skill_0);
-                });
-            }
         if (Skill_Btn[1] != null)
         {
             Skill_Btn[1].onClick.AddListener(() =>
@@ -92,16 +90,40 @@ public class Game_Mgr : MonoBehaviour
                 UseSill_Key(SkillType.Skill_3);
             });
         }
+        if (Restart_Btn != null)
+        {
+            Restart_Btn.onClick.AddListener(() =>
+            {
+                SceneManager.LoadScene("GameScene");
+            });
+        }
     }
 
     // Update is called once per frame
     void Update()
     {
         CoolCalc();
+        GameEnd();
+    }
+
+    void GameEnd()
+    {//둘중 하나 체력 0이되면 화면 가리고 승리자 표시
+        if (m_RefEnemy.CurEState == E_State.Die)
+        {
+            m_RefPlayer.CurPState = P_State.Win;
+            EndPanel.SetActive(true);
+            EndText.text = "플레이어 승리";
+        }
+        if (m_RefPlayer.CurPState == P_State.Die)
+        {
+            m_RefEnemy.CurEState = E_State.Win;
+            EndPanel.SetActive(true);
+            EndText.text = "AI 승리";
+        }
     }
 
     void CoolCalc()
-    {
+    {//스킬 아이콘 이미지, 쿨타임 생성
         if (m_RefPlayer.CalcSk1Cool <= 0.0f)
         {
             m_RefPlayer.CalcSk1Cool = 0.0f;

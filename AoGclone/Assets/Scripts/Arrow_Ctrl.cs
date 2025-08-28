@@ -38,7 +38,7 @@ public class Arrow_Ctrl : MonoBehaviour
             Startpos = Player.transform;
             Targetpos = Enemy.transform;
         }
-        else
+        else if(AState == ArrowState.ai)
         {//ai가 쐈을 때
             Player = GameObject.Find("Player");
             Enemy = GameObject.Find("E_ShotPoint");

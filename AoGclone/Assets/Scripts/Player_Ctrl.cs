@@ -2,22 +2,34 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+public enum P_State
+{
+    Play,
+    Die,
+    Win,
+    Count
+}
+
 public class Player_Ctrl : MonoBehaviour
 {
+    [HideInInspector] public P_State CurPState = P_State.Play;
+
     Game_Mgr Gm_Mgr = null;
 
     float h = 0.0f;
 
     float moveSpeed = 5.0f;
     Vector3 moveDir = Vector3.zero;
+    public GameObject Body = null;
+    GameObject Arrow = null;
 
     Vector3 CalcTs = Vector3.zero;
 
-    GameObject Enemy = null;
-    GameObject Player = null;
-
     bool isMove = false;
+    bool isSkill = false;
+
     float AtkCool = 0.0f;
+    float CalcAtkCool = 2.0f;
 
     [HideInInspector] public float HeroCurHp = 1500.0f;
     [HideInInspector] public float HeroMaxHp = 1500.0f;
@@ -32,6 +44,8 @@ public class Player_Ctrl : MonoBehaviour
     [HideInInspector] public float Sk3Cool = 5.0f;
     [HideInInspector] public float Sk4Cool = 6.0f;
 
+    Animator m_Anim;
+
     // Start is called before the first frame update
     void Start()
     {
@@ -39,27 +53,43 @@ public class Player_Ctrl : MonoBehaviour
         HeroMaxHp = 1500.0f;
         Gm_Mgr = GameObject.FindObjectOfType<Game_Mgr>();
 
-        Enemy = GameObject.Find("Enemy");
-        Player = this.gameObject;
+        CurPState = P_State.Play;
+
+        m_Anim = GetComponentInChildren<Animator>();
+
+        AtkCool = CalcAtkCool;
     }
 
     // Update is called once per frame
     void Update()
     {
-        Move();
-        RimitMove();
-        Atk();
-
-        Debug.Log(isMove);
+        if (CurPState == P_State.Play)
+        {
+            Move();
+            RimitMove();
+            if (isMove == false && isSkill == false)
+            {//이동, 스킬 사용 아닐 때 기본 공격 발동
+                Atk();
+            }
+        }
+        else if (CurPState == P_State.Die)
+        {
+            return;
+        }
+        else
+        {//상대방을 죽이면 승리 애니메이션 재생
+            m_Anim.Play("victory");
+        }
     }
 
     void Move()
     {//이동
-        h = Input.GetAxis("Horizontal");
+        h = 0.0f;
 
         if (Gm_Mgr.isRightClick == false && Gm_Mgr.isLeftClick == false)
-        {
+        {//버튼 안누를 때 제자리 판정 후 리턴
             isMove = false;
+            Body.gameObject.transform.localScale = new Vector3(1, 1, 1);
             return;
         }
         else if (Gm_Mgr.isRightClick == true)
@@ -74,12 +104,18 @@ public class Player_Ctrl : MonoBehaviour
         }
 
         if (h != 0.0f)
-        {
-            moveDir = new Vector3(h, 0.0f, 0.0f);
-            if (1.0f < moveDir.magnitude)
-                moveDir.Normalize();
+        {//버튼 입력 시 이동
+            if (isSkill == false)
+            {//스킬 사용중엔 이동 x
+                m_Anim.Play("walk");
+                Body.gameObject.transform.localScale = new Vector3(h, 1, 1);
+                moveDir = new Vector3(h, 0.0f, 0.0f);
 
-            transform.position += moveDir * moveSpeed * Time.deltaTime;
+                if (1.0f < moveDir.magnitude)
+                    moveDir.Normalize();
+
+                transform.position += moveDir * moveSpeed * Time.deltaTime;
+            }
         }
     }
 
@@ -105,27 +141,53 @@ public class Player_Ctrl : MonoBehaviour
 
     public void HpUpdate(float Dmg)
     {//캐릭터 체력 업데이트
+        if (HeroCurHp <= 0.0f)
+        {
+            HeroCurHp = 0.0f;
+            return;
+        }
+
         HeroCurHp -= Dmg;
+
+        if (HeroCurHp <= 0.0f)
+        {
+            HeroCurHp = 0.0f;
+            CurPState = P_State.Die;
+            m_Anim.Play("die");
+            Gm_Mgr.HpBar.fillAmount = HeroCurHp / HeroMaxHp;
+            Gm_Mgr.HpText.text = HeroCurHp.ToString("N0") + " / " + HeroMaxHp.ToString("N0");
+            return;
+        }
+
         Gm_Mgr.HpBar.fillAmount = HeroCurHp / HeroMaxHp;
         Gm_Mgr.HpText.text = HeroCurHp.ToString("N0") + " / " + HeroMaxHp.ToString("N0");
     }
 
     void Atk()
-    {
+    {//기본공격
         AtkCool -= Time.deltaTime;
 
         if (AtkCool <= 0.0f)
         {
-            if (isMove == false)
+            if (isMove == false && isSkill == false)
             {
+                m_Anim.SetFloat("atkSpeed", 1.0f);
+                m_Anim.Play("attack");
                 GameObject Obj = Resources.Load("ArrowPrefab") as GameObject;
-                Instantiate(Obj);
+                if (m_Anim.GetCurrentAnimatorStateInfo(0).normalizedTime >= 0.6f &&
+                m_Anim.GetCurrentAnimatorStateInfo(0).IsName("attack"))
+                {
+                    Instantiate(Obj);
+                    AtkCool = CalcAtkCool;
+                }
             }
-            else
+        }
+        else
+        {//이동, 스킬 사용, 공격중 모두 아닐때는 아이들 상태
+            if (isMove == false && isSkill == false)
             {
-                AtkCool = 1.0f;
+                m_Anim.Play("idle");
             }
-            AtkCool = 1.0f;
         }
     }
 
@@ -142,6 +204,8 @@ public class Player_Ctrl : MonoBehaviour
                 return;
 
             CalcSk1Cool = Sk1Cool;
+            m_Anim.SetFloat("atkSpeed", 3.0f);
+            m_Anim.Play("Skill");
             StartCoroutine(Skill1());
         }
         else if (a_SkType == SkillType.Skill_1)
@@ -150,10 +214,9 @@ public class Player_Ctrl : MonoBehaviour
                 return;
 
             CalcSk2Cool = Sk2Cool;
-            GameObject Obj = Resources.Load("ArrowPrefab") as GameObject;
-            GameObject Arrow = Instantiate(Obj);
-            Arrow.GetComponent<Transform>().localScale *= 3.0f;
-            Arrow.GetComponent<Arrow_Ctrl>().isBig = true;
+            m_Anim.SetFloat("atkSpeed", 1.0f);
+            m_Anim.Play("Skill");
+            StartCoroutine(Skill2(0.6f));
         }
         else if (a_SkType == SkillType.Skill_2)
         {
@@ -175,11 +238,31 @@ public class Player_Ctrl : MonoBehaviour
 
     IEnumerator Skill1()
     {//0.3초 텀으로 3발 발사
+        isSkill = true;
+
         GameObject Obj = Resources.Load("ArrowPrefab") as GameObject;
-        Instantiate(Obj);
-        yield return new WaitForSeconds(0.3f);
-        Instantiate(Obj);
-        yield return new WaitForSeconds(0.3f);
-        Instantiate(Obj);
+
+        for (int i = 0; i < 5; i++)
+        {
+            yield return new WaitForSeconds(0.3f);
+            Instantiate(Obj);
+        }
+        m_Anim.Play("idle");
+        isSkill = false;
+    }
+
+    IEnumerator Skill2(float delay)
+    {//대형화살 발사
+        isSkill = true;
+
+        yield return new WaitForSeconds(delay);
+
+        GameObject Obj = Resources.Load("ArrowPrefab") as GameObject;
+
+        Arrow = Instantiate(Obj);
+        Arrow.GetComponent<Transform>().localScale *= 3.0f;
+        Arrow.GetComponent<Arrow_Ctrl>().isBig = true;
+
+        isSkill = false;
     }
 }
